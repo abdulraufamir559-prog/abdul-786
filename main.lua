@@ -6,13 +6,77 @@ import "android.net.Uri"
 import "android.media.MediaPlayer"
 import "android.media.RingtoneManager"
 import "android.app.AlertDialog"
+import "android.app.ProgressDialog"
 import "android.content.SharedPreferences"
 import "java.io.File"
+import "java.net.URL"
+import "java.io.FileOutputStream"
 import "android.os.Handler"
 import "android.speech.tts.TextToSpeech"
 
--- Title & Version 2.3
-activity.setTitle("BEST TOOL Version 2.3")
+-- Title & Version
+local currentVersion = "2.4"
+activity.setTitle("BEST TOOL Version " .. currentVersion)
+
+-- File Paths
+local localPath = "/storage/emulated/0/解说/Tools/abdul 786/main.lua"
+local rawCodeUrl = "https://raw.githubusercontent.com/abdulraufamir559-prog/abdul-786/main/main.lua"
+local versionUrl = "https://raw.githubusercontent.com/abdulraufamir559-prog/abdul-786/main/version.txt"
+
+-- ==========================================
+--    AUTO UPDATE SYSTEM (FIXED)
+-- ==========================================
+function checkUpdate()
+  thread(function(vUrl, cVersion)
+    local status, serverVersion = pcall(function() 
+      return URL(vUrl).readText():trim() 
+    end)
+    
+    if status and serverVersion ~= cVersion then
+      activity.runOnUiThread(Runnable({
+        run=function()
+          AlertDialog.Builder(activity)
+          .setTitle("Update Available!")
+          .setMessage("New Version "..serverVersion.." is ready. Do you want to update?")
+          .setPositiveButton("Update Now", {onClick=function() downloadUpdate() end})
+          .setNegativeButton("Later", nil)
+          .show()
+        end
+      }))
+    elseif not status then
+      print("Update check failed: Network Error")
+    end
+  end, versionUrl, currentVersion)
+end
+
+function downloadUpdate()
+  local pd = ProgressDialog.show(activity, nil, "Updating code, please wait...")
+  thread(function(fileUrl, targetPath)
+    local status, err = pcall(function()
+      local data = URL(fileUrl).readText()
+      local file = File(targetPath)
+      if not file.getParentFile().exists() then file.getParentFile().mkdirs() end
+      local out = FileOutputStream(file)
+      out.write(data:getBytes())
+      out.close()
+    end)
+    
+    activity.runOnUiThread(Runnable({
+      run=function()
+        pd.dismiss()
+        if status then
+          AlertDialog.Builder(activity)
+          .setTitle("Success")
+          .setMessage("Update complete! Please restart the tool.")
+          .setPositiveButton("OK", {onClick=function() activity.finish() end})
+          .show()
+        else
+          print("Update Error: " .. tostring(err))
+        end
+      end
+    }))
+  end, rawCodeUrl, localPath)
+end
 
 -- ==========================================
 --    CORE FUNCTIONS & DATA
@@ -182,9 +246,10 @@ function showMenu()
   if name == "" then askName() return end
   local menu_layout = {
     LinearLayout, orientation="vertical", gravity="center", padding="20dp",
-    {TextView, text="BEST TOOL v2.3\nWelcome " .. name, textSize="20sp", gravity="center", textColor="#2196F3"},
+    {TextView, text="BEST TOOL v"..currentVersion.."\nWelcome " .. name, textSize="20sp", gravity="center", textColor="#2196F3"},
     {Button, text="Survival Arena (1vs1)", layout_width="fill", layout_marginTop="20dp", onClick=startSurvivalArena},
     {Button, text="Snake & Ladder", layout_width="fill", onClick=showSL},
+    {Button, text="Check for Updates", layout_width="fill", onClick=checkUpdate},
     {Button, text="Exit", layout_width="fill", onClick=function() activity.finish() end}
   }
   activity.setContentView(loadlayout(menu_layout))
@@ -200,4 +265,5 @@ function askName()
 end
 
 -- FINAL START
+checkUpdate()
 if getName()=="" then askName() else showMenu() end
