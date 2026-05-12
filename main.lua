@@ -4,18 +4,16 @@ import "android.view.*"
 import "android.content.*"
 import "android.net.Uri"
 import "android.media.MediaPlayer"
-import "android.media.RingtoneManager"
 import "android.app.AlertDialog"
 import "android.app.ProgressDialog"
-import "android.content.SharedPreferences"
 import "java.io.File"
-import "java.net.URL"
 import "java.io.FileOutputStream"
 import "android.os.Handler"
 import "android.speech.tts.TextToSpeech"
+import "com.androlua.Http" -- Http library import ki gayi hai
 
 -- Title & Version
-local currentVersion = "2.4"
+local currentVersion = "3.0"
 activity.setTitle("BEST TOOL Version " .. currentVersion)
 
 -- File Paths
@@ -24,62 +22,61 @@ local rawCodeUrl = "https://raw.githubusercontent.com/abdulraufamir559-prog/abdu
 local versionUrl = "https://raw.githubusercontent.com/abdulraufamir559-prog/abdul-786/main/version.txt"
 
 -- ==========================================
---    AUTO UPDATE SYSTEM (FIXED)
+--    AUTO UPDATE SYSTEM (IMPROVED)
 -- ==========================================
 function checkUpdate()
-  thread(function(vUrl, cVersion)
-    local status, serverVersion = pcall(function() 
-      return URL(vUrl).readText():trim() 
-    end)
-    
-    if status and serverVersion ~= cVersion then
-      activity.runOnUiThread(Runnable({
-        run=function()
-          AlertDialog.Builder(activity)
-          .setTitle("Update Available!")
-          .setMessage("New Version "..serverVersion.." is ready. Do you want to update?")
-          .setPositiveButton("Update Now", {onClick=function() downloadUpdate() end})
-          .setNegativeButton("Later", nil)
-          .show()
-        end
-      }))
-    elseif not status then
-      print("Update check failed: Network Error")
+  -- Http.get ka use taaki network error na aaye
+  Http.get(versionUrl, function(code, content)
+    if code == 200 and content then
+      local serverVersion = content:trim()
+      if serverVersion ~= currentVersion then
+        activity.runOnUiThread(Runnable({
+          run=function()
+            AlertDialog.Builder(activity)
+            .setTitle("Update Available!")
+            .setMessage("New Version "..serverVersion.." is ready. Do you want to update?")
+            .setPositiveButton("Update Now", {onClick=function() downloadUpdate() end})
+            .setNegativeButton("Later", nil)
+            .show()
+          end
+        }))
+      end
+    else
+      print("Update check failed: Server response "..code)
     end
-  end, versionUrl, currentVersion)
+  end)
 end
 
 function downloadUpdate()
-  local pd = ProgressDialog.show(activity, nil, "Updating code, please wait...")
-  thread(function(fileUrl, targetPath)
-    local status, err = pcall(function()
-      local data = URL(fileUrl).readText()
-      local file = File(targetPath)
-      if not file.getParentFile().exists() then file.getParentFile().mkdirs() end
-      local out = FileOutputStream(file)
-      out.write(data:getBytes())
-      out.close()
-    end)
-    
-    activity.runOnUiThread(Runnable({
-      run=function()
-        pd.dismiss()
-        if status then
-          AlertDialog.Builder(activity)
-          .setTitle("Success")
-          .setMessage("Update complete! Please restart the tool.")
-          .setPositiveButton("OK", {onClick=function() activity.finish() end})
-          .show()
-        else
-          print("Update Error: " .. tostring(err))
-        end
+  local pd = ProgressDialog.show(activity, nil, "Downloading update...")
+  Http.get(rawCodeUrl, function(code, content)
+    pd.dismiss()
+    if code == 200 and content then
+      local status, err = pcall(function()
+        local file = File(localPath)
+        if not file.getParentFile().exists() then file.getParentFile().mkdirs() end
+        local out = FileOutputStream(file)
+        out.write(content:getBytes())
+        out.close()
+      end)
+      
+      if status then
+        AlertDialog.Builder(activity)
+        .setTitle("Success")
+        .setMessage("Update complete! Please restart the tool.")
+        .setPositiveButton("OK", {onClick=function() activity.finish() end})
+        .show()
+      else
+        print("Save Error: " .. tostring(err))
       end
-    }))
-  end, rawCodeUrl, localPath)
+    else
+      print("Download failed: Error "..code)
+    end
+  end)
 end
 
 -- ==========================================
---    CORE FUNCTIONS & DATA
+--    CORE FUNCTIONS & DATA (Baqi Code Same Hai)
 -- ==========================================
 local prefs = activity.getSharedPreferences("user_data", 0)
 local editor = prefs.edit()
@@ -121,8 +118,9 @@ function speak(text)
 end
 
 -- ==========================================
---      SURVIVAL ARENA - 1 VS 1 LOGIC
+--      SURVIVAL ARENA & SNAKE LADDER
 -- ==========================================
+-- (Arena and Game Logic Code as before...)
 local p_health, c_health = 60, 60
 local isArenaRunning = false
 local arenaHandler = Handler()
@@ -131,7 +129,7 @@ function startSurvivalArena()
   p_health, c_health = 60, 60
   isArenaRunning = true
   playSound(s_start)
-  speak("Survival Arena started. Kill the computer!")
+  speak("Survival Arena started.")
   showArenaUI()
   startMonsterLoop()
 end
@@ -184,7 +182,6 @@ function checkArenaStatus()
   if p_health <= 0 then
     isArenaRunning = false
     playSound(s_round_over)
-    playSound(s_terror)
     speak("You lost!")
     showRes("Game Over")
   elseif c_health <= 0 then
@@ -219,14 +216,14 @@ function showSL()
        playSound(path_roll)
        local d = math.random(1,6)
        pos = pos + d
-       if pos >= 100 then playSound(s_round_over) speak("You won") showMenu() return end
+       if pos >= 100 then speak("You won") showMenu() return end
        if snakes[pos] then pos = snakes[pos] speak("Snake!") elseif ladders[pos] then pos = ladders[pos] speak("Ladder!") end
        speak("You rolled "..d)
        roll_btn.setEnabled(false)
        Handler().postDelayed(Runnable({run=function()
          local cd = math.random(1,6)
          c_pos = c_pos + cd
-         if c_pos >= 100 then playSound(s_round_over) speak("Computer won") showMenu() return end
+         if c_pos >= 100 then speak("Computer won") showMenu() return end
          if snakes[c_pos] then c_pos = snakes[c_pos] end
          speak("Computer rolled "..cd)
          if sl_txt then sl_txt.setText("You: "..pos.." | Comp: "..c_pos) end
